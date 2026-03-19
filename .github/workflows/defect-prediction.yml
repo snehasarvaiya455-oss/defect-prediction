@@ -1,0 +1,53 @@
+name: JIT Defect Prediction
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  predict:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Cache Hugging Face model
+        uses: actions/cache@v3
+        with:
+          path: /tmp/hf_cache
+          key: codebert-jit-defect-v1
+
+      - name: Install dependencies
+        run: |
+          pip install transformers torch scikit-learn pandas numpy
+
+      - name: Extract features
+        run: python scripts/extract_features.py
+
+      - name: Predict defect risk
+        run: python scripts/predict.py
+        env:
+          HF_MODEL: twoteenn/codebert-jit-defect
+
+      - name: Post PR comment
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const result = fs.readFileSync('prediction_result.txt', 'utf8');
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: result
+            });
